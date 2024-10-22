@@ -1,0 +1,27 @@
+---
+- block:
+  - name: get latest release
+    uri:
+      url: "https://api.github.com/repos/restic/restic/releases/latest"
+      method: GET
+      return_content: true
+      status_code: 200
+      body_format: json
+      validate_certs: false
+    register: _latest_release
+    until: _latest_release.status == 200
+    retries: 5
+    run_once: true
+    delegate_to: localhost
+
+  - name: "Set restic version to {{ _latest_release.json.tag_name[1:] }}"
+    set_fact:
+      restic_version: "{{ _latest_release.json.tag_name[1:] }}"
+  when: restic_version == "latest"
+
+- name: "Get checksum for {{ go_arch_map[ansible_architecture] | default(ansible_architecture) }} architecture"
+  set_fact:
+    restic_checksum: "{{ item.split(' ')[0] }}"
+  with_items:
+    - "{{ lookup('url', 'https://github.com/restic/restic/releases/download/v' + restic_version + '/SHA256SUMS', wantlist=True) | list }}"
+  when: "('restic_' + restic_version + '_linux_' + (go_arch_map[ansible_architecture] | default(ansible_architecture)) + '.bz2') in item"

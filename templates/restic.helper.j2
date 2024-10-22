@@ -1,0 +1,20 @@
+#!/bin/sh
+#
+# jinja2: lstrip_blocks: "True"
+# vi: ft=jinja.crontab
+{{ ansible_managed | comment }}
+(
+  PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin:{{ restic_install_path }}
+  export PATH
+  RESTIC_REPOSITORY={{ item.url | trim | quote }}
+  export RESTIC_REPOSITORY
+  RESTIC_PASSWORD={{ item.password | trim | quote }}
+  export RESTIC_PASSWORD
+  {% if item.remote_credentials is defined %}
+  {% for k,v in item.remote_credentials.items() %}
+  {{ k | upper }}={{ v | trim | quote }}
+  export {{ k | upper }}
+  {% endfor %}
+  {% endif %}
+  restic $@
+)

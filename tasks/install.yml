@@ -1,0 +1,86 @@
+---
+- name: Ensure restic group is present
+  group:
+    name: "{{ restic_group }}"
+    system: true
+
+- name: Ensure restic user is present
+  user:
+    name: "{{ restic_user }}"
+    group: "{{ restic_group }}"
+    shell: "{{ restic_shell }}"
+    system: true
+    createhome: true
+    home: "{{ restic_home }}"
+    state: present
+  when: restic_user != 'root'
+
+- name: Ensure restic installation directory exist
+  file:
+    state: 'directory'
+    path: '{{ restic_install_path }}'
+
+- name: Ensure restic user can write to log dirs if defined
+  file:
+    state: 'directory'
+    path: '{{ item | dirname }}'
+  with_items:
+    - "{{ restic_cron_stdout_file }}"
+    - "{{ restic_cron_stderr_file }}"
+  when:
+    - item != None
+    - item is not match("/dev/.*")
+
+- name: Ensure restic user can write to log files if defined
+  file:
+    state: 'touch'
+    path: '{{ item }}'
+    owner: '{{ restic_user }}'
+    group: '{{ restic_group }}'
+    mode: 0640
+  with_items:
+    - "{{ restic_cron_stdout_file }}"
+    - "{{ restic_cron_stderr_file }}"
+  when:
+    - item != None
+    - item is not match("/dev/.*")
+
+- name: Download client binary
+  become: false
+  get_url:
+    url: "https://github.com/restic/restic/releases/download/v{{ restic_version }}/restic_{{ restic_version }}_{{ ansible_system | lower }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.bz2"
+    dest: "/tmp/restic_{{ restic_version }}_{{ ansible_system | lower }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.bz2"
+    checksum: "sha256:{{ restic_checksum }}"
+  delegate_to: localhost
+  run_once: true
+  check_mode: false
+
+- name: Decompress the binary
+  become: false
+  shell: "bzip2 -dc /tmp/restic_{{ restic_version }}_{{ ansible_system | lower }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}.bz2 > /tmp/restic_{{ restic_version }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+  args:
+    creates: "/tmp/restic_{{ restic_version }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+  delegate_to: localhost
+  run_once: true
+  check_mode: false
+
+- name: Propagate restic binary
+  copy:
+    src: "/tmp/restic_{{ restic_version }}_{{ go_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+    dest: '{{ restic_install_path }}/restic'
+    mode: '0750'
+    owner: 'root'
+    group: '{{ restic_group }}'
+
+- name: Install libcap on Debian systems
+  package:
+    name: "libcap2-bin"
+    state: present
+  when: ansible_os_family | lower == "debian"
+
+- name: Set proper capabilities for restic binary
+  capabilities:
+    path: '{{ restic_install_path }}/restic'
+    capability: cap_dac_read_search+ep
+    state: present
+  when: not ansible_check_mode

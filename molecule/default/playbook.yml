@@ -1,0 +1,26 @@
+---
+- name: Default use-case scenario
+  hosts: all
+  any_errors_fatal: true
+  roles:
+    - ansible-restic
+  vars:
+    restic_user: restic
+    restic_group: restic
+    restic_repos:
+      - name: local-example
+        url: "/tmp/restic"
+        password: "correcthorsebatterystaple"
+        jobs:
+          - command: 'restic backup /srv'
+            at: '0 1  * * *'
+        retention_time: '17 5 * * *'
+        retention:
+          last: 2
+          hourly: 4
+          weekly: 9
+          monthly: 3
+          yearly: 10
+          tags:
+            - special
+            - test

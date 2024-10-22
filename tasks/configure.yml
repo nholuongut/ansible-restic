@@ -1,0 +1,28 @@
+---
+- name: Deploy cron script
+  template:
+    src: 'restic.cron.j2'
+    dest: '/etc/cron.d/restic-{{ item.name }}'
+    mode: '0640'
+  no_log: true
+  with_items: '{{ restic_repos }}'
+  register: _cronfiles
+
+- name: Deploy helper commands
+  template:
+    src: 'restic.helper.j2'
+    dest: "{{ restic_install_path }}/restic-{{ item.name }}"
+    owner: "{{ restic_user }}"
+    group: "{{ restic_group }}"
+    mode: '0750'
+  no_log: true
+  with_items: '{{ restic_repos }}'
+
+- name: Initialize restic repositories
+  command: "{{ restic_install_path }}/restic-{{ item.name }} init"
+  ignore_errors: true
+  no_log: true
+  with_items: "{{ restic_repos }}"
+  when:
+    - _cronfiles is changed
+    - restic_initialize_repos
